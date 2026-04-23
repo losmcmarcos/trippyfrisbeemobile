@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TRIPPY FRISBEE - ULTIMATE MOBILE</title>
+    <title>TRIPPY FRISBEE - ULTIMATE</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
         * { touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -51,7 +51,7 @@
         <div id="poison-txt" style="color: lime;">STATUS: SOBER</div>
     </div>
   
-    <div id="controls-ui"><b>SIDES</b>: MOVE (2D)<br><b>CENTER</b>: THROW</div>
+    <div id="controls-ui"><b>SIDES</b>: MOVE<br><b>CENTER</b>: MOVE UP / THROW</div>
 
     <div id="touch-controls">
         <div id="touch-left" class="touch-zone" style="left:0;"></div>
@@ -64,7 +64,9 @@
 
 <script>
 // --- ASSET & SETUP ---
-const imgPatNick = new Image(); imgPatNick.src = 'patnick.jpeg';
+const imgNick = new Image(); imgNick.src = 'nick.jpeg';
+const imgPat = new Image(); imgPat.src = 'pat.jpeg';
+
 const sounds = {
     soundtrack: new Audio('sountrack.mp3'),
     frisbee: new Audio('fx_frisbee1.mp3'),
@@ -79,14 +81,13 @@ const ctx = canvas.getContext('2d');
 let score = 0, gameState = 'MENU', poisonedLevel = 0, selectedPlayerName = null;
 let userRole = 'bottom', frameCount = 0;
 
-// Oggetti di gioco
 const tree = { x: 0, y: 0, trunkW: 45, trunkH: 75, opening: 130, branchWidth: 250, branchLength: 160, offsetX: 0, drift: 0 };
 const players = { 
-    top: { x: 0, y: 80, speed: 7, skin: '#ffd393', hair: '#431' }, 
-    bottom: { x: 0, y: 0, speed: 7, skin: '#ffd393', hair: '#d34' } 
+    top: { x: 0, y: 80, speed: 7 }, 
+    bottom: { x: 0, y: 0, speed: 7 } 
 };
 const frisbee = { x: 0, y: 0, r: 9, vy: 0, active: false, owner: 'bottom', trail: [], passedThroughBranches: false };
-const musicNpc = { x: 0, y: 0, anim: 0 };
+const musicNpc = { x: 0, y: 0 };
 const spiders = [];
 const musicalNotes = [];
 let activeHallucination = null;
@@ -98,7 +99,11 @@ document.getElementById('touch-left').ontouchstart = (e) => { e.preventDefault()
 document.getElementById('touch-left').ontouchend = () => touchState.left = false;
 document.getElementById('touch-right').ontouchstart = (e) => { e.preventDefault(); touchState.right = true; };
 document.getElementById('touch-right').ontouchend = () => touchState.right = false;
-document.getElementById('touch-throw').ontouchstart = (e) => { e.preventDefault(); touchState.center = true; launch(userRole); };
+document.getElementById('touch-throw').ontouchstart = (e) => { 
+    e.preventDefault(); 
+    touchState.center = true; 
+    if (frisbee.owner === userRole && !frisbee.active) launch(userRole); 
+};
 document.getElementById('touch-throw').ontouchend = () => touchState.center = false;
 
 function goToSelect() { sounds.soundtrack.play().catch(()=>{}); document.getElementById('screen-title').style.display = 'none'; document.getElementById('screen-select').style.display = 'block'; }
@@ -127,7 +132,7 @@ function setupPositions() {
 }
 
 function launch(p) {
-    if (!frisbee.active && frisbee.owner === p) {
+    if (!frisbee.active) {
         frisbee.active = true; frisbee.vy = (p === 'bottom') ? -12 : 12;
         try { sounds.frisbee.currentTime = 0; sounds.frisbee.play(); } catch(e){}
     }
@@ -144,17 +149,18 @@ function update() {
     poisonedLevel = Math.floor(score / 3);
     let tripPerc = poisonedLevel * 15;
 
-    // Movimento 2D Giocatore
+    // Movimento Giocatore
     let user = players[userRole];
     if (touchState.left) user.x -= user.speed;
     if (touchState.right) user.x += user.speed;
-    // Movimento Y: se premi entrambi i lati o il centro, ti avvicini all'albero
+    
+    // Movimento Verticale (si avvicina all'albero se premi al centro)
     if (touchState.center && userRole === 'bottom' && user.y > tree.y + 110) user.y -= 3;
     if (!touchState.center && userRole === 'bottom' && user.y < canvas.height - 110) user.y += 2;
     
     user.x = Math.max(30, Math.min(canvas.width - 30, user.x));
 
-    // CPU Specchiata
+    // CPU Mirroring
     let cpu = players[userRole === 'bottom' ? 'top' : 'bottom'];
     cpu.x += (user.x - cpu.x) * 0.1;
     cpu.y = canvas.height - user.y;
@@ -169,7 +175,7 @@ function update() {
         frisbee.trail.push({x: frisbee.x, y: frisbee.y});
         if (frisbee.trail.length > 10) frisbee.trail.shift();
 
-        // Collisione Albero Oscillante
+        // Collisione Albero
         const relX = frisbee.x - (tree.x + tree.offsetX);
         if (Math.abs(frisbee.y - tree.y) < 25) {
             if (Math.abs(relX) > tree.opening/2 && Math.abs(relX) < tree.branchWidth/2) {
@@ -192,14 +198,13 @@ function update() {
 
     if (!frisbee.active && frisbee.owner !== userRole && Math.random() > 0.97) launch(frisbee.owner);
 
-    // Eventi: Ragni e Note
+    // Ragni e Note
     if (tripPerc >= 30 && spiders.length < 4 && Math.random() > 0.99) spiders.push({ x: Math.random()*canvas.width, y: -20, vy: 1.5, legAnim: 0 });
     spiders.forEach((s, i) => { s.y += s.vy; s.legAnim += 0.2; if(s.y > canvas.height) spiders.splice(i, 1); });
-    
-    if (frameCount % 45 === 0) musicalNotes.push({ x: musicNpc.x, y: musicNpc.y, o: 1, vx: -1.5 });
-    musicalNotes.forEach((n, i) => { n.x += n.vx; n.y -= 1; n.o -= 0.01; if(n.o <= 0) musicalNotes.splice(i, 1); });
+    if (frameCount % 45 === 0) musicalNotes.push({ x: musicNpc.x, y: musicNpc.y, o: 1 });
+    musicalNotes.forEach((n, i) => { n.y -= 1; n.o -= 0.01; if(n.o <= 0) musicalNotes.splice(i, 1); });
 
-    // UI & Trip logic
+    // UI Trip
     document.getElementById('score-txt').innerText = "SCORE: " + score.toString().padStart(3, '0');
     let pTxt = document.getElementById('poison-txt');
     if (score >= 3) {
@@ -210,14 +215,20 @@ function update() {
         tree.offsetX = 0; pTxt.innerText = "STATUS: SOBER"; pTxt.style.color = "lime"; pTxt.classList.remove('blink');
     }
 
-    // Allucinazioni Nick/Pat
+    // Hallucinations (Nick @ 60%, Pat @ 90%)
     if (hallucinationCooldown > 0) hallucinationCooldown--;
-    if (!activeHallucination && hallucinationCooldown <= 0 && tripPerc >= 60) {
-        activeHallucination = { type: tripPerc >= 90 ? 'Pat' : 'Nick', timer: 180 };
-        document.getElementById('trippy-subs').innerText = activeHallucination.type === 'Pat' ? "let's fucking drink a beer" : "it's gonna get better guys";
-        document.getElementById('trippy-subs').style.display = 'block';
+    if (!activeHallucination && hallucinationCooldown <= 0) {
+        if (tripPerc >= 90) {
+            activeHallucination = { type: 'Pat', timer: 180, img: imgPat, text: "let's fucking drink a beer" };
+        } else if (tripPerc >= 60) {
+            activeHallucination = { type: 'Nick', timer: 180, img: imgNick, text: "it's gonna get better guys" };
+        }
+        if (activeHallucination) {
+            document.getElementById('trippy-subs').innerText = activeHallucination.text;
+            document.getElementById('trippy-subs').style.display = 'block';
+        }
     }
-    if (activeHallucination) { activeHallucination.timer--; if(activeHallucination.timer <= 0) { activeHallucination = null; document.getElementById('trippy-subs').style.display = 'none'; hallucinationCooldown = 500; } }
+    if (activeHallucination) { activeHallucination.timer--; if(activeHallucination.timer <= 0) { activeHallucination = null; document.getElementById('trippy-subs').style.display = 'none'; hallucinationCooldown = 600; } }
 }
 
 // --- RENDER ---
@@ -225,47 +236,26 @@ function draw() {
     ctx.fillStyle = '#1e3d1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (gameState !== 'PLAYING') { requestAnimationFrame(draw); return; }
 
-    // Disegno Albero (Dettagliato)
+    // Disegno Albero
     ctx.save(); ctx.translate(tree.x + tree.offsetX, tree.y);
     ctx.fillStyle = '#3d2514'; ctx.fillRect(-tree.trunkW/2, 0, tree.trunkW, tree.trunkH);
     [-1, 1].forEach(s => {
-        ctx.beginPath(); ctx.moveTo(s*tree.trunkW/2, 5); 
-        ctx.lineTo(s*tree.branchWidth/2, -tree.branchLength/3);
-        ctx.lineTo(s*tree.opening/2, -tree.branchLength); 
-        ctx.lineTo(s*tree.opening/2 - s*25, -tree.branchLength);
-        ctx.lineTo(s*tree.branchWidth/2 - s*25, -tree.branchLength/3 + 15);
-        ctx.fill();
+        ctx.beginPath(); ctx.moveTo(s*tree.trunkW/2, 5); ctx.lineTo(s*tree.branchWidth/2, -tree.branchLength/3);
+        ctx.lineTo(s*tree.opening/2, -tree.branchLength); ctx.lineTo(s*tree.opening/2 - s*25, -tree.branchLength); ctx.fill();
     });
     ctx.restore();
 
-    // Musico NPC
-    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(musicNpc.x, musicNpc.y + Math.sin(frameCount*0.2)*5, 18, 0, Math.PI*2); ctx.fill();
-    musicalNotes.forEach(n => { ctx.globalAlpha = n.o; ctx.fillStyle = 'white'; ctx.font = "20px VT323"; ctx.fillText('♪', n.x, n.y); ctx.globalAlpha = 1; });
-
-    // Frisbee e Scia
-    frisbee.trail.forEach((t, i) => { ctx.fillStyle = `rgba(220, 255, 0, ${i/12})`; ctx.beginPath(); ctx.arc(t.x, t.y, frisbee.r*(i/10), 0, Math.PI*2); ctx.fill(); });
-    ctx.fillStyle = '#dfff00'; ctx.beginPath(); ctx.arc(frisbee.x, frisbee.y, frisbee.r, 0, Math.PI*2); ctx.fill();
-
-    // Personaggi (Ale e Gug con dettagli originali)
+    // Personaggi (Dettagliati)
     [players.bottom, players.top].forEach((p, i) => {
         ctx.save(); ctx.translate(p.x, p.y);
         let isGug = (i === 1 && selectedPlayerName === 'Alessandro') || (i === 0 && selectedPlayerName === 'Guglielmo');
-        
-        // Base corpo/capelli
-        ctx.fillStyle = isGug ? '#431' : '#d34'; 
-        ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI*2); ctx.fill();
-        
-        // Faccia
+        ctx.fillStyle = isGug ? '#431' : '#d34'; ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#ffd393'; ctx.beginPath(); ctx.arc(0, isGug?0:4, 18, 0, Math.PI*2); ctx.fill();
-        
-        // Dettaglio Barba Rossa per Alessandro
-        if(!isGug) {
-            ctx.fillStyle = '#941'; ctx.beginPath(); ctx.arc(0, 8, 12, 0, Math.PI); ctx.fill();
-        }
+        if(!isGug) { ctx.fillStyle = '#941'; ctx.beginPath(); ctx.arc(0, 8, 12, 0, Math.PI); ctx.fill(); }
         ctx.restore();
     });
 
-    // Ragni con gambe animate
+    // Ragni
     spiders.forEach(s => {
         ctx.strokeStyle = '#111'; ctx.beginPath(); ctx.moveTo(s.x, 0); ctx.lineTo(s.x, s.y); ctx.stroke();
         ctx.save(); ctx.translate(s.x, s.y);
@@ -278,22 +268,25 @@ function draw() {
         ctx.restore();
     });
 
-    // Barra dei Funghi (UI Trip)
-    let mushroomCount = Math.min(poisonedLevel, 10);
-    for (let m = 0; m < mushroomCount; m++) {
+    // Barra dei Funghi
+    for (let m = 0; m < Math.min(poisonedLevel, 10); m++) {
         let mx = canvas.width - 40 - (m * 35); let my = canvas.height - 40;
         ctx.fillStyle = '#d34'; ctx.beginPath(); ctx.arc(mx, my - 10, 12, Math.PI, 0); ctx.fill();
         ctx.fillStyle = '#eee'; ctx.fillRect(mx - 4, my - 10, 8, 10);
     }
 
-    // Allucinazioni Nick/Pat
+    // Frisbee
+    frisbee.trail.forEach((t, i) => { ctx.fillStyle = `rgba(220, 255, 0, ${i/12})`; ctx.beginPath(); ctx.arc(t.x, t.y, frisbee.r*(i/10), 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle = '#dfff00'; ctx.beginPath(); ctx.arc(frisbee.x, frisbee.y, frisbee.r, 0, Math.PI*2); ctx.fill();
+
+    // ALLUCINAZIONI (Immagini Separate)
     if (activeHallucination) {
         ctx.save();
-        let isNick = activeHallucination.type === 'Nick';
         let progress = (180 - activeHallucination.timer) / 180;
-        ctx.globalAlpha = progress < 0.1 ? progress * 10 : (progress > 0.9 ? (1 - progress) * 10 : 0.7);
-        let dw = canvas.width * 0.55, dh = dw * 1.6;
-        ctx.drawImage(imgPatNick, isNick?550:50, 0, 450, 800, isNick?0:canvas.width-dw, canvas.height-dh, dw, dh);
+        ctx.globalAlpha = progress < 0.1 ? progress * 10 : (progress > 0.9 ? (1 - progress) * 10 : 0.8);
+        let dw = canvas.width * 0.5, dh = dw * 1.5;
+        let isNick = activeHallucination.type === 'Nick';
+        ctx.drawImage(activeHallucination.img, isNick?0:canvas.width-dw, canvas.height-dh, dw, dh);
         ctx.restore();
     }
 
