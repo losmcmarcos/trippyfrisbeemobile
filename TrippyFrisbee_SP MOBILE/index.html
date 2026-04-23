@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TRIPPY FRISBEE - MOBILE EDITION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        /* Disabilita zoom e scroll su mobile */
+        * { touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+        
+        body { margin: 0; overflow: hidden; background: #081a05; font-family: 'VT323', monospace; color: white; image-rendering: pixelated; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.95); z-index: 20; text-align: center; }
+        #overlay h1 { font-size: clamp(40px, 15vw, 85px); text-shadow: 5px 5px #d34; margin: 0; letter-spacing: 2px; line-height: 0.8; }
+        
+        .mushroom { width: 60px; height: 50px; margin-bottom: 20px; position: relative; display: inline-block; animation: bounce 2s infinite ease-in-out; }
+        .m-top { width: 60px; height: 30px; background: #d34; border-radius: 30px 30px 5px 5px; box-shadow: inset -10px -5px rgba(0,0,0,0.2); }
+        .m-dot { position: absolute; background: white; width: 10px; height: 10px; border-radius: 50%; }
+        .m-stem { width: 25px; height: 20px; background: #eee; margin: -2px auto 0; border-radius: 0 0 5px 5px; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        
+        .btn { padding: 10px 45px; background: #d34; color: white; border: 4px solid white; cursor: pointer; margin-top: 30px; font-size: 26px; font-family: 'VT323', monospace; box-shadow: 5px 5px #000; transition: 0.2s; }
+        .btn:hover { background: #ff5555; transform: scale(1.05); }
+        
+        .char-container { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; justify-content: center; }
+        .char-card { border: 4px solid #555; padding: 5px; cursor: pointer; background: rgba(0,0,0,0.5); width: 120px; transition: 0.3s; }
+        .char-card img { width: 100%; height: 140px; object-fit: cover; border: 2px solid #333; margin-bottom: 5px; }
+        .char-card.selected { border-color: #fff; background: rgba(255,255,255,0.1); box-shadow: 0 0 15px #fff; transform: translateY(-5px); }
+        
+        #ui-ingame { position: absolute; top: 10px; left: 10px; pointer-events: none; text-shadow: 2px 2px #000; z-index: 10; display: none; font-size: clamp(18px, 5vw, 30px); }
+        
+        #controls-ui { position: absolute; top: 10px; right: 10px; text-align: right; pointer-events: none; text-shadow: 2px 2px #000; z-index: 10; display: none; font-size: clamp(14px, 4vw, 20px); color: #aaa; }
+        
+        /* Area Touch per Mobile */
+        #touch-controls { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: none; }
+        .touch-zone { position: absolute; height: 100%; width: 33.3%; opacity: 0; }
+        #touch-left { left: 0; }
+        #touch-throw { left: 33.3%; }
+        #touch-right { left: 66.6%; }
+
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+        
+        #trippy-subs { position: absolute; bottom: 20%; width: 100%; text-align: center; font-size: clamp(20px, 8vw, 42px); color: #fff; text-shadow: 4px 4px #000; z-index: 30; pointer-events: none; display: none; padding: 0 10px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <div id="overlay">
+        <div id="screen-title">
+            <div class="mushroom"><div class="m-top"><div class="m-dot" style="top:5px; left:15px;"></div><div class="m-dot" style="top:12px; left:40px; width:6px; height:6px;"></div></div><div class="m-stem"></div></div>
+            <h1>TRIPPY FRISBEE</h1>
+            <p style="color: #666; margin-top: 10px; letter-spacing: 2px;">MOBILE EDITION (VS CPU)</p>
+            <button class="btn" onclick="goToSelect()">INSERT COIN</button>
+        </div>
+        <div id="screen-select" style="display:none;">
+            <h2>SELECT HERO</h2>
+            <div class="char-container">
+                <div class="char-card" id="card-ale" onclick="selectChar('Alessandro')"><img src="ale.jpeg" alt="Ale"><h3>ALE</h3></div>
+                <div class="char-card" id="card-gug" onclick="selectChar('Guglielmo')"><img src="gug.jpeg" alt="Gug"><h3>GUG</h3></div>
+            </div>
+            <button class="btn" id="startBtn" style="opacity:0.3; pointer-events:none;">START</button>
+        </div>
+    </div>
+
+    <div id="ui-ingame">
+        <div id="score-txt">SCORE: 000</div>
+        <div id="poison-txt" style="color: lime;">STATUS: SOBER</div>
+    </div>
+  
+    <div id="controls-ui">
+        <b>TOUCH LEFT/RIGHT:</b> MOVE<br>
+        <b>CENTER:</b> THROW
+    </div>
+
+    <div id="touch-controls">
+        <div id="touch-left" class="touch-zone"></div>
+        <div id="touch-throw" class="touch-zone"></div>
+        <div id="touch-right" class="touch-zone"></div>
+    </div>
+
+    <div id="trippy-subs"></div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+// Caricamento Immagini Personaggi Trippy
+const imgNick = new Image(); imgNick.src = 'Nick.png';
+const imgPat = new Image(); imgPat.src = 'Pat.png';
+
+const sounds = {
+    soundtrack: new Audio('sountrack.mp3'),
+    frisbee: [new Audio('fx_frisbee1.mp3'), new Audio('fx_frisbee2.mp3'), new Audio('fx_frisbee3.mp3')],
+    merda: [new Audio('fx_merda1.mp3'), new Audio('fx_merda2.mp3'), new Audio('fx_merda3.mp3')],
+    point: new Audio('fx_point.mp3'),
+    schianto: new Audio('fx_schianto.mp3')
+};
+sounds.soundtrack.loop = true;
+let currentMerdaIdx = 0, currentFrisbeeIdx = 0;
+
+function unlockAudio() { 
+    Object.values(sounds).forEach(s => { 
+        if (Array.isArray(s)) s.forEach(t => { t.play().catch(()=>{}); t.pause(); }); 
+        else { s.play().catch(()=>{}); s.pause(); } 
+    }); 
+}
+
+function playSound(key) {
+    try {
+        if (key === 'soundtrack') sounds.soundtrack.play().catch(() => {});
+        else if (key === 'frisbee') { sounds.frisbee[currentFrisbeeIdx].currentTime = 0; sounds.frisbee[currentFrisbeeIdx].play(); currentFrisbeeIdx = (currentFrisbeeIdx + 1) % 3; }
+        else if (key === 'point') { sounds.soundtrack.pause(); sounds.point.play(); setTimeout(() => { if(gameState === 'PLAYING') sounds.soundtrack.play(); }, 1500); }
+        else if (key === 'merda') { sounds.soundtrack.pause(); sounds.merda[currentMerdaIdx].play(); currentMerdaIdx = (currentMerdaIdx + 1) % 3; setTimeout(() => { if(gameState === 'PLAYING') sounds.soundtrack.play(); }, 1800); }
+        else if (key === 'schianto') { sounds.soundtrack.pause(); sounds.schianto.play(); }
+    } catch(e) {}
+}
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let score = 0, gameState = 'MENU', poisonedLevel = 0, keys = {}, selectedPlayerName = null;
+let userRole = 'bottom', frameCount = 0;
+
+const tree = { x: 0, y: 0, trunkW: 50, trunkH: 80, opening: 140, branchWidth: 260, branchLength: 160, offsetX: 0, drift: 0 };
+const players = { top: { x: 0, y: 80, speed: 7 }, bottom: { x: 0, y: 0, speed: 7 } };
+const frisbee = { x: 0, y: 0, r: 8, vy: 0, active: false, owner: 'bottom', trail: [], passedThroughBranches: false };
+const musicNpc = { x: 0, y: 0, anim: 0 };
+const spiders = [];  
+const musicalNotes = [];
+
+let activeHallucination = null;
+let hallucinationCooldown = 0;
+
+function goToSelect() { unlockAudio(); playSound('soundtrack'); document.getElementById('screen-title').style.display = 'none'; document.getElementById('screen-select').style.display = 'block'; }
+function selectChar(name) {
+    selectedPlayerName = name; userRole = (name === 'Alessandro') ? 'bottom' : 'top';
+    document.getElementById('card-ale').classList.toggle('selected', name === 'Alessandro');
+    document.getElementById('card-gug').classList.toggle('selected', name === 'Guglielmo');
+    document.getElementById('startBtn').style.opacity = "1"; document.getElementById('startBtn').style.pointerEvents = "auto";
+}
+
+document.getElementById('startBtn').addEventListener('click', () => {
+    gameState = 'PLAYING'; 
+    document.getElementById('overlay').style.display = 'none'; 
+    document.getElementById('ui-ingame').style.display = 'block';
+    document.getElementById('controls-ui').style.display = 'block';
+    document.getElementById('touch-controls').style.display = 'block';
+    setupPositions();
+});
+
+function setupPositions() {
+    canvas.width = window.innerWidth; 
+    canvas.height = window.innerHeight;
+    
+    // Adatta dimensioni albero allo schermo mobile
+    tree.trunkW = canvas.width * 0.15;
+    tree.opening = canvas.width * 0.4;
+    tree.branchWidth = canvas.width * 0.7;
+    
+    players.top.x = canvas.width / 2; players.top.y = 80;
+    players.bottom.x = canvas.width / 2; players.bottom.y = canvas.height - 110;
+    tree.x = canvas.width / 2; tree.y = canvas.height / 2;
+    musicNpc.x = canvas.width - 60; musicNpc.y = canvas.height / 2;
+    if (!frisbee.active) resetFrisbee();
+}
+
+// Gestione Touch
+const touchState = { left: false, right: false };
+document.getElementById('touch-left').addEventListener('touchstart', (e) => { e.preventDefault(); touchState.left = true; });
+document.getElementById('touch-left').addEventListener('touchend', () => { touchState.left = false; });
+document.getElementById('touch-right').addEventListener('touchstart', (e) => { e.preventDefault(); touchState.right = true; });
+document.getElementById('touch-right').addEventListener('touchend', () => { touchState.right = false; });
+document.getElementById('touch-throw').addEventListener('touchstart', (e) => { e.preventDefault(); launch(userRole); });
+
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function launch(p) {
+    if (!frisbee.active && frisbee.owner === p) {
+        frisbee.active = true; frisbee.passedThroughBranches = false;
+        frisbee.vy = (p === 'bottom') ? -10 : 10; playSound('frisbee');
+    }
+}
+
+function update() {
+    if (gameState !== 'PLAYING') return;
+    frameCount++; 
+    
+    poisonedLevel = Math.floor(score / 3);
+    let trippingPercentage = poisonedLevel * 15;
+    let pTxt = document.getElementById('poison-txt');
+    
+    if (score >= 3) {
+        pTxt.innerText = "STATUS: TRIPPING (" + trippingPercentage + "%)"; 
+        pTxt.style.color = "#f0f"; pTxt.classList.add('blink');
+        tree.drift += 0.005 + (poisonedLevel * 0.002); 
+        tree.offsetX = Math.sin(tree.drift) * (canvas.width * 0.3 + score * 2);
+    } else {
+        pTxt.innerText = "STATUS: SOBER"; 
+        pTxt.style.color = "lime"; pTxt.classList.remove('blink');
+        tree.offsetX = 0;
+    }
+
+    // Gestione Hallucination
+    if (hallucinationCooldown > 0) hallucinationCooldown--;
+    const subDiv = document.getElementById('trippy-subs');
+    if (!activeHallucination && hallucinationCooldown <= 0) {
+        if (trippingPercentage >= 90) {
+            activeHallucination = { type: 'Pat', timer: 180, side: 'right', text: "let's fucskiijdj dgk adnckawsd powrs afucking beer" };
+            subDiv.innerText = activeHallucination.text; subDiv.style.display = 'block';
+        } else if (trippingPercentage >= 60) {
+            activeHallucination = { type: 'Nick', timer: 180, side: 'left', text: "...it's gonna get better guys" };
+            subDiv.innerText = activeHallucination.text; subDiv.style.display = 'block';
+        }
+    }
+    if (activeHallucination) {
+        activeHallucination.timer--;
+        if (activeHallucination.timer <= 0) { activeHallucination = null; subDiv.style.display = 'none'; hallucinationCooldown = 300; }
+    }
+
+    // Movimento Player (Touch + Keys)
+    let user = players[userRole];
+    if ((keys['ArrowLeft'] || touchState.left) && user.x > 30) user.x -= user.speed;
+    if ((keys['ArrowRight'] || touchState.right) && user.x < canvas.width - 30) user.x += user.speed;
+    if (keys['Space']) launch(userRole);
+
+    // CPU Logic (semplificata per mobile)
+    let cpuRole = (userRole === 'bottom') ? 'top' : 'bottom';
+    let cpu = players[cpuRole];
+    let targetX = frisbee.active ? frisbee.x : user.x;
+    let cpuSpeed = 4.5 + (score * 0.15); 
+    if (cpu.x < targetX - 5) cpu.x += cpuSpeed; else if (cpu.x > targetX + 5) cpu.x -= cpuSpeed;
+
+    // Collisioni
+    if (frisbee.active) {
+        const relX = frisbee.x - (tree.x + tree.offsetX);
+        if (frisbee.y < tree.y + 20 && frisbee.y > tree.y - tree.branchLength) {
+            if (Math.abs(relX) > tree.opening / 2 - 5 && Math.abs(relX) < tree.branchWidth / 2 + 10) {
+                playSound('schianto'); playSound('merda');
+                score = Math.max(0, score - 1);
+                frisbee.active = false; setTimeout(resetFrisbee, 600); return; 
+            } else if (Math.abs(relX) <= tree.opening / 2 - 5) { frisbee.passedThroughBranches = true; }
+        }
+    }
+
+    if (!frisbee.active && frisbee.owner === cpuRole) setTimeout(() => launch(cpuRole), 800);
+
+    if (frisbee.active) {
+        frisbee.y += frisbee.vy; frisbee.trail.push({x: frisbee.x, y: frisbee.y});
+        if (frisbee.trail.length > 8) frisbee.trail.shift();
+        let dTop = Math.hypot(frisbee.x - players.top.x, frisbee.y - players.top.y);
+        let dBot = Math.hypot(frisbee.x - players.bottom.x, frisbee.y - players.bottom.y);
+        if (frisbee.vy < 0 && dTop < 40) { if (frisbee.passedThroughBranches) { score++; playSound('point'); } frisbee.owner = 'top'; resetFrisbee(); }
+        else if (frisbee.vy > 0 && dBot < 40) { if (frisbee.passedThroughBranches) { score++; playSound('point'); } frisbee.owner = 'bottom'; resetFrisbee(); }
+        if (frisbee.y < -50 || frisbee.y > canvas.height + 50) { playSound('merda'); resetFrisbee(); }
+    } else {
+        frisbee.x = frisbee.owner === 'bottom' ? players.bottom.x : players.top.x;
+        frisbee.y = frisbee.owner === 'bottom' ? players.bottom.y - 40 : players.top.y + 40;
+    }
+    document.getElementById('score-txt').innerText = "SCORE: " + score.toString().padStart(3, '0');
+}
+
+function resetFrisbee() {
+    frisbee.active = false; frisbee.vy = 0; frisbee.trail = [];
+    frisbee.x = frisbee.owner === 'bottom' ? players.bottom.x : players.top.x;
+    frisbee.y = frisbee.owner === 'bottom' ? players.bottom.y - 45 : players.top.y + 45;
+}
+
+function draw() {
+    ctx.fillStyle = '#1e3d1a'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (gameState === 'PLAYING') {
+        ctx.save();
+        if (poisonedLevel > 0 && Math.random() > 0.94) {
+            ctx.translate((Math.random()-0.5) * 10, (Math.random()-0.5) * 10);
+            ctx.filter = `hue-rotate(${poisonedLevel * 20}deg)`;
+        }
+
+        // Albero
+        ctx.save(); ctx.translate(tree.x + tree.offsetX, tree.y);
+        ctx.fillStyle = '#3d2514'; ctx.fillRect(-tree.trunkW/2, -5, tree.trunkW, tree.trunkH);
+        [-1, 1].forEach(side => {
+            ctx.beginPath(); ctx.moveTo(side * (tree.trunkW/2), 10);
+            ctx.lineTo(side * (tree.branchWidth * 0.5), -tree.branchLength * 0.4); ctx.lineTo(side * (tree.opening * 0.5), -tree.branchLength);
+            ctx.lineTo(side * (tree.opening * 0.5 - 20), -tree.branchLength); ctx.lineTo(side * (tree.branchWidth * 0.4), -tree.branchLength * 0.3);
+            ctx.fill();
+        });
+        ctx.restore();
+
+        // Frisbee
+        frisbee.trail.forEach((p, i) => { ctx.fillStyle = `rgba(200, 255, 0, ${i/8})`; ctx.beginPath(); ctx.arc(p.x, p.y, frisbee.r * (i/8), 0, Math.PI*2); ctx.fill(); });
+        ctx.fillStyle = '#dfff00'; ctx.beginPath(); ctx.arc(frisbee.x, frisbee.y, frisbee.r, 0, Math.PI*2); ctx.fill();
+        
+        // Players
+        [players.bottom, players.top].forEach((p, i) => {
+            ctx.fillStyle = (i === 0) ? '#d34' : '#431';
+            ctx.beginPath(); ctx.arc(p.x, p.y, 18, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#ffd393'; ctx.beginPath(); ctx.arc(p.x, p.y + (i===0?-2:2), 14, 0, Math.PI*2); ctx.fill();
+        });
+
+        // Hallucination
+        if (activeHallucination) {
+            ctx.save();
+            let img = (activeHallucination.type === 'Nick') ? imgNick : imgPat;
+            let progress = (180 - activeHallucination.timer) / 180;
+            let scale = 0.8 + (progress * 0.4);
+            ctx.globalAlpha = progress < 0.1 ? progress * 10 : (progress > 0.9 ? (1 - progress) * 10 : 1);
+            let drawW = canvas.width * 0.6 * scale; let drawH = drawW * 1.5;
+            let posX = (activeHallucination.side === 'left') ? -20 : canvas.width - drawW + 20;
+            ctx.drawImage(img, posX, canvas.height - drawH, drawW, drawH);
+            ctx.restore();
+        }
+
+        ctx.restore();
+    }
+    requestAnimationFrame(draw); update();
+}
+
+window.addEventListener('resize', setupPositions);
+setupPositions(); 
+draw();
+</script>
+</body>
+</html>
