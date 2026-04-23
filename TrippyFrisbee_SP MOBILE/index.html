@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TRIPPY FRISBEE - ULTIMATE</title>
+    <title>TRIPPY FRISBEE - FULL ARCADE</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
         * { touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -11,7 +11,7 @@
         canvas { display: block; width: 100vw; height: 100vh; }
         
         #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.95); z-index: 100; text-align: center; }
-        #overlay h1 { font-size: clamp(50px, 15vw, 90px); text-shadow: 5px 5px #d34; margin: 0; }
+        #overlay h1 { font-size: clamp(50px, 15vw, 90px); text-shadow: 5px 5px #d34; margin: 0; line-height: 0.9; }
         .btn { padding: 15px 40px; background: #d34; color: white; border: 4px solid white; cursor: pointer; margin-top: 30px; font-size: 28px; font-family: 'VT323', monospace; box-shadow: 5px 5px #000; }
         
         .char-container { display: flex; gap: 20px; margin: 30px 0; }
@@ -87,13 +87,13 @@ const players = {
     bottom: { x: 0, y: 0, speed: 7 } 
 };
 const frisbee = { x: 0, y: 0, r: 9, vy: 0, active: false, owner: 'bottom', trail: [], passedThroughBranches: false };
-const musicNpc = { x: 0, y: 0 };
+const musicNpc = { x: 0, y: 0, anim: 0 };
 const spiders = [];
 const musicalNotes = [];
 let activeHallucination = null;
 let hallucinationCooldown = 0;
 
-// --- GESTIONE INPUT ---
+// --- INPUT ---
 const touchState = { left: false, right: false, center: false };
 document.getElementById('touch-left').ontouchstart = (e) => { e.preventDefault(); touchState.left = true; };
 document.getElementById('touch-left').ontouchend = () => touchState.left = false;
@@ -128,7 +128,7 @@ function setupPositions() {
     tree.x = canvas.width / 2; tree.y = canvas.height / 2;
     players.top.y = 80;
     players.bottom.y = canvas.height - 110;
-    musicNpc.x = canvas.width - 50; musicNpc.y = canvas.height / 2;
+    musicNpc.x = canvas.width - 60; musicNpc.y = canvas.height / 2;
 }
 
 function launch(p) {
@@ -142,30 +142,26 @@ function resetFrisbee() {
     frisbee.active = false; frisbee.trail = []; frisbee.passedThroughBranches = false;
 }
 
-// --- CORE ENGINE ---
+// --- ENGINE ---
 function update() {
     if (gameState !== 'PLAYING') return;
     frameCount++;
     poisonedLevel = Math.floor(score / 3);
     let tripPerc = poisonedLevel * 15;
 
-    // Movimento Giocatore
+    // Movimento 2D
     let user = players[userRole];
     if (touchState.left) user.x -= user.speed;
     if (touchState.right) user.x += user.speed;
-    
-    // Movimento Verticale (si avvicina all'albero se premi al centro)
     if (touchState.center && userRole === 'bottom' && user.y > tree.y + 110) user.y -= 3;
     if (!touchState.center && userRole === 'bottom' && user.y < canvas.height - 110) user.y += 2;
-    
     user.x = Math.max(30, Math.min(canvas.width - 30, user.x));
 
-    // CPU Mirroring
     let cpu = players[userRole === 'bottom' ? 'top' : 'bottom'];
     cpu.x += (user.x - cpu.x) * 0.1;
-    cpu.y = canvas.height - user.y;
+    cpu.y = (userRole === 'bottom') ? (canvas.height - user.y) : user.y;
 
-    // Frisbee Magnetico
+    // Frisbee
     if (!frisbee.active) {
         let ownerObj = players[frisbee.owner];
         frisbee.x = ownerObj.x;
@@ -174,8 +170,6 @@ function update() {
         frisbee.y += frisbee.vy;
         frisbee.trail.push({x: frisbee.x, y: frisbee.y});
         if (frisbee.trail.length > 10) frisbee.trail.shift();
-
-        // Collisione Albero
         const relX = frisbee.x - (tree.x + tree.offsetX);
         if (Math.abs(frisbee.y - tree.y) < 25) {
             if (Math.abs(relX) > tree.opening/2 && Math.abs(relX) < tree.branchWidth/2) {
@@ -183,8 +177,6 @@ function update() {
                 score = Math.max(0, score - 1); resetFrisbee();
             } else if (Math.abs(relX) <= tree.opening/2) { frisbee.passedThroughBranches = true; }
         }
-
-        // Prese
         if (Math.hypot(frisbee.x - players.top.x, frisbee.y - players.top.y) < 40 && frisbee.vy < 0) {
             if (frisbee.passedThroughBranches) { score++; try{sounds.point.play();}catch(e){} }
             frisbee.owner = 'top'; resetFrisbee();
@@ -198,13 +190,14 @@ function update() {
 
     if (!frisbee.active && frisbee.owner !== userRole && Math.random() > 0.97) launch(frisbee.owner);
 
-    // Ragni e Note
+    // Animazioni NPC e Spiders
+    musicNpc.anim = Math.sin(frameCount * 0.15) * 8;
     if (tripPerc >= 30 && spiders.length < 4 && Math.random() > 0.99) spiders.push({ x: Math.random()*canvas.width, y: -20, vy: 1.5, legAnim: 0 });
     spiders.forEach((s, i) => { s.y += s.vy; s.legAnim += 0.2; if(s.y > canvas.height) spiders.splice(i, 1); });
-    if (frameCount % 45 === 0) musicalNotes.push({ x: musicNpc.x, y: musicNpc.y, o: 1 });
-    musicalNotes.forEach((n, i) => { n.y -= 1; n.o -= 0.01; if(n.o <= 0) musicalNotes.splice(i, 1); });
+    if (frameCount % 45 === 0) musicalNotes.push({ x: musicNpc.x - 20, y: musicNpc.y, o: 1 });
+    musicalNotes.forEach((n, i) => { n.y -= 1.5; n.x -= 0.5; n.o -= 0.01; if(n.o <= 0) musicalNotes.splice(i, 1); });
 
-    // UI Trip
+    // UI
     document.getElementById('score-txt').innerText = "SCORE: " + score.toString().padStart(3, '0');
     let pTxt = document.getElementById('poison-txt');
     if (score >= 3) {
@@ -215,18 +208,12 @@ function update() {
         tree.offsetX = 0; pTxt.innerText = "STATUS: SOBER"; pTxt.style.color = "lime"; pTxt.classList.remove('blink');
     }
 
-    // Hallucinations (Nick @ 60%, Pat @ 90%)
+    // Hallucinations
     if (hallucinationCooldown > 0) hallucinationCooldown--;
     if (!activeHallucination && hallucinationCooldown <= 0) {
-        if (tripPerc >= 90) {
-            activeHallucination = { type: 'Pat', timer: 180, img: imgPat, text: "let's fucking drink a beer" };
-        } else if (tripPerc >= 60) {
-            activeHallucination = { type: 'Nick', timer: 180, img: imgNick, text: "it's gonna get better guys" };
-        }
-        if (activeHallucination) {
-            document.getElementById('trippy-subs').innerText = activeHallucination.text;
-            document.getElementById('trippy-subs').style.display = 'block';
-        }
+        if (tripPerc >= 90) activeHallucination = { type: 'Pat', timer: 180, img: imgPat, text: "let's fucking drink a beer" };
+        else if (tripPerc >= 60) activeHallucination = { type: 'Nick', timer: 180, img: imgNick, text: "it's gonna get better guys" };
+        if (activeHallucination) { document.getElementById('trippy-subs').innerText = activeHallucination.text; document.getElementById('trippy-subs').style.display = 'block'; }
     }
     if (activeHallucination) { activeHallucination.timer--; if(activeHallucination.timer <= 0) { activeHallucination = null; document.getElementById('trippy-subs').style.display = 'none'; hallucinationCooldown = 600; } }
 }
@@ -245,7 +232,22 @@ function draw() {
     });
     ctx.restore();
 
-    // Personaggi (Dettagliati)
+    // DISEGNO DEL MUSICO (NPC)
+    ctx.save(); ctx.translate(musicNpc.x, musicNpc.y + musicNpc.anim);
+    // Corpo
+    ctx.fillStyle = '#333'; ctx.fillRect(-15, 0, 30, 40);
+    // Testa
+    ctx.fillStyle = '#ffd393'; ctx.beginPath(); ctx.arc(0, -10, 15, 0, Math.PI*2); ctx.fill();
+    // Cappello
+    ctx.fillStyle = '#111'; ctx.fillRect(-18, -25, 36, 5); ctx.fillRect(-10, -35, 20, 12);
+    // Strumento (Sassofono stilizzato)
+    ctx.strokeStyle = 'gold'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(5, 5); ctx.quadraticCurveTo(25, 10, 20, 30); ctx.stroke();
+    ctx.restore();
+
+    // Note musicali
+    musicalNotes.forEach(n => { ctx.globalAlpha = n.o; ctx.fillStyle = 'white'; ctx.font = "24px VT323"; ctx.fillText('♪', n.x, n.y); ctx.globalAlpha = 1; });
+
+    // Players
     [players.bottom, players.top].forEach((p, i) => {
         ctx.save(); ctx.translate(p.x, p.y);
         let isGug = (i === 1 && selectedPlayerName === 'Alessandro') || (i === 0 && selectedPlayerName === 'Guglielmo');
@@ -279,7 +281,7 @@ function draw() {
     frisbee.trail.forEach((t, i) => { ctx.fillStyle = `rgba(220, 255, 0, ${i/12})`; ctx.beginPath(); ctx.arc(t.x, t.y, frisbee.r*(i/10), 0, Math.PI*2); ctx.fill(); });
     ctx.fillStyle = '#dfff00'; ctx.beginPath(); ctx.arc(frisbee.x, frisbee.y, frisbee.r, 0, Math.PI*2); ctx.fill();
 
-    // ALLUCINAZIONI (Immagini Separate)
+    // Allucinazioni
     if (activeHallucination) {
         ctx.save();
         let progress = (180 - activeHallucination.timer) / 180;
